@@ -1,0 +1,85 @@
+---
+title: "Practice Exam"
+author: "Karl Rohe"
+date: "2/27/2020"
+output: md_document
+---
+
+# Practice Exam
+
+This practice exam asks you to do several code wrangling tasks that we have done in class so far. 
+
+Clone this repo into Rstudio and fill in the necessary code.  Then, commit and push to github.  Finally, turn in a link to canvas. 
+
+
+
+```{r echo = F}
+library(tidyverse)
+library(nycflights13)
+# flights
+# weather
+```
+
+
+Make a plot with three facets, one for each airport in the weather data.  The x-axis should be the day of the year (1:365) and the y-axis should be the mean temperature recorded on that day, at that airport.
+```{r}
+library(lubridate)
+weather %>% mutate(day_of_year = yday(time_hour)) %>% 
+  group_by(origin, day_of_year) %>% 
+  summarise(mean_temp = mean(temp, na.rm = T)) %>% 
+  ggplot(aes(x = day_of_year, y = mean_temp, color = origin)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth()
+```
+  
+**The temperature of each origin have almost same pattern. Increase first, reach peak around 200th day, then decrease. This reasonable since the three airports are all in NY.**  
+  
+  
+Make a non-tidy matrix of that data where each row is an airport and each column is a day of the year.  
+
+```{r}
+weather %>% mutate(day_of_year = yday(time_hour)) %>% 
+  group_by(origin, day_of_year) %>% 
+  summarise(mean_temp = mean(temp, na.rm = T)) %>%
+  pivot_wider(names_from = day_of_year, values_from = mean_temp)
+```
+
+
+For each (airport, day) contruct a tidy data set of the airport's "performance" as the proportion of flights that departed less than an hour late. 
+```{r}
+n = flights %>% 
+  group_by(origin, year, month, day) %>% 
+  count()
+performance = flights %>% 
+  group_by(origin, year, month, day) %>% 
+  filter(!is.na(dep_delay), dep_delay<60) %>% 
+  count() %>%   
+  left_join(n, by = c("origin","year","month","day"), suffix = c("_Less60Delay", "_Total")) %>% 
+  mutate(performance = n_Less60Delay/n_Total)
+performance
+```
+
+Construct a tidy data set to that give weather summaries for each (airport, day).  Use the total precipitation, minimum visibility, maximum wind_gust, and average wind_speed.  
+```{r}
+weather_summary = weather %>% 
+  group_by(origin, year, month, day) %>% 
+  summarise(TotalPrecip = sum(precip, na.rm = T),
+            MinVisb = min(visib, na.rm = T),
+            AvgWindSpeed = mean(wind_speed, na.rm = T))
+weather_summary
+```
+
+Construct a linear model to predict the performance of each (airport,day) using the weather summaries and a "fixed effect" (dummy variable for airport) for each airport.  Display the summaries.  
+```{r}
+data = left_join(performance, weather_summary, by = c("origin","year","month","day"))
+m = lm(performance~origin+TotalPrecip+MinVisb+AvgWindSpeed, data)
+summary(m)
+```
+
+Repeat the above, but only for EWR.  Obviously, exclude the fixed effect for each airport.
+```{r}
+EWRdata = data %>% filter(origin == "EWR")
+mEWR = lm(performance~TotalPrecip+MinVisb+AvgWindSpeed, EWRdata)
+summary(mEWR)
+```
